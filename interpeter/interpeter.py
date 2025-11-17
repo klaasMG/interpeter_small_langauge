@@ -1,7 +1,7 @@
 class Variable:
-    def __init__(self, type, name, valeu_stack_index, var_id):
+    def __init__(self, type, name, value_stack_index, var_id):
         self.name = name
-        self.valeu_stack_index = valeu_stack_index
+        self.value_stack_index = value_stack_index
         self.type = type
         self.var_id = var_id
 class interpreter:
@@ -12,44 +12,68 @@ class interpreter:
         self.next_var_id = 0
         self.value_stack = []
         self.value_type_stack = []
+    def run_code(self):
+        self.interpret_code()
+    
+    def parse_code(self , lines_of_code: list[str]):
+        code_lines = []
+        for line in lines_of_code:
+            line = line.strip()  # <-- FIXED
+            if not line:
+                continue
+            
+            parts = line.split(";")
+            for p in parts:
+                p = p.strip()
+                if p:
+                    code_lines.append(p)
+        
+        # Fix print(...) only AFTER splitting
+        for index , expression in enumerate(code_lines):
+            if expression.startswith("print("):
+                expression = expression.replace("(" , " ")
+                expression = expression.replace(")" , " ")
+                code_lines[index] = expression
+        
+        return code_lines
+    
     def interpret_code(self):
         with open("code.txt", "r") as code_file:
             read_lines = []
             for line in code_file:
                 read_lines.append(line)
-            for line in read_lines:
+            code_lines = self.parse_code(read_lines)
+            for line in code_lines:
                 if not self.error:
-                    line_commands = line.split()
-                    for line_command in line_commands:
-                        if line_command == "dec":
-                            if line_commands[3] != "=":
-                                self.send_error("Syntax Error")
-                                break
-                            self.variable_stack.append(Variable(line_commands[1],line_commands[2], len(self.value_stack),self.next_var_id))
-                            self.var_to_id[line_commands[2]] = self.next_var_id
-                            self.next_var_id += 1
-                            var_lst = line_commands[4:]
-                            var = self.solve_expression(var_lst)
-                            if var is None:
-                                self.send_error("Syntax Error")
-                                print("None Found")
+                    if line.startswith("dec"):
+                        line_command = line.split()
+                        if line_command[3] != "=":
+                            self.send_error("error")
+                        self.variable_stack.append(Variable(line_command[1] , line_command[2] , len(self.value_stack) , self.next_var_id))
+                        self.var_to_id[line_command[2]] = self.next_var_id
+                        self.next_var_id += 1
+                        var_lst = line_command[4:]
+                        var = self.solve_expression(var_lst)
+                        if var is None:
+                            self.send_error("Error")
+                            print("None Found")
+                        else:
+                            self.value_stack.append(int(var))
+                            self.value_type_stack.append(line_command[1])
+                    elif line.startswith("print"):
+                        print_line = line.split(maxsplit = 1)
+                        print_line = print_line[1]
+                        if print_line.startswith('"') and print_line.endswith('"'):
+                            str_for_print = str_for_print[1:-1]
+                            print(str_for_print)
+                        elif print_line == print_line.split()[1]:
+                            str_for_print = self.get_var(print_line)
+                            if str_for_print is None:
+                                self.send_error()
                             else:
-                                self.value_stack.append(int(var))
-                                self.value_type_stack.append(line_commands[1])
-                            break
-                        elif line_command.startswith("print("):
-                            print("a")
-                            print_list = line_command.split("(")
-                            str_for_print = print_list[1].replace(")","")
-                            if str_for_print.startswith('"') and str_for_print.endswith('"'):
-                                str_for_print = str_for_print[1:-1]
                                 print(str_for_print)
-                            else:
-                                print("b")
-                                str_for_print = self.get_var(str_for_print)
-                                if str_for_print is None:
-                                    self.send_error("syntax error")
-                                print(self.get_var(str_for_print))
+                        else:
+                            self.send_error()
                 else:
                     break
             print("Interpeter Debug:")
@@ -57,6 +81,7 @@ class interpreter:
                 print(value)
             for value in self.value_type_stack:
                 print(value)
+            
     def send_error(self,error_message=None):
         self.error = True
         if error_message is None:
@@ -99,11 +124,14 @@ class interpreter:
         else:
             use_value = value
             if self.get_type(use_value) != expected_type:
+                print("f")
                 use_value = None
+            if expected_type == int:
+                use_value = int(use_value)
         return use_value
-    
     def get_type(self, value_type):
         value_type_check = value_type
+        value_type_check = int
         return value_type_check
     
 interpreter_run = interpreter()
