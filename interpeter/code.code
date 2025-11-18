@@ -1,2 +1,2 @@
-dec int x = 1;
+dec int x = 1 - 2;
 print(x)

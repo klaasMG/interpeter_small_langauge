@@ -182,6 +182,7 @@ class Interpreter:
         error: bool = False
         possible_opperators = ["+" , "-" , "*" , "/" , "%" , ">>" , "<<"]
         opperator_stack = []
+        value_stack_opp = []
         if 1 == len(expression):
             if expression[0].lstrip("-").isdigit():
                 self.push_value("int" , expression[0])
@@ -198,7 +199,7 @@ class Interpreter:
                 if value in possible_opperators:
                     opperator_stack.append(value)
                 elif value.lstrip("-").isdigit():
-                    self.push_value("int" , value)
+                    value_stack_opp.append(value)
                 elif value in self.variable_names_to_id:
                     var = self.get_variable("int" , value)
                     if var is not None:
@@ -212,6 +213,10 @@ class Interpreter:
                     error = True
                     break
             if not error:
+                opperator_stack.reverse()
+                value_stack_opp.reverse()
+                for value in value_stack_opp:
+                    self.push_value("int", value)
                 val_first = self.pop_value()[1]
                 result: int = int(val_first)
                 result_str:str = ""
