@@ -64,16 +64,17 @@ class interpreter:
                         print_line = line.split(maxsplit = 1)
                         print_line = print_line[1]
                         if print_line.startswith('"') and print_line.endswith('"'):
-                            str_for_print = str_for_print[1:-1]
+                            str_for_print = print_line[1:-1]
                             print(str_for_print)
-                        elif print_line == print_line.split()[1]:
+                        elif print_line == print_line.split()[0]:
                             str_for_print = self.get_var(print_line)
                             if str_for_print is None:
                                 self.send_error()
                             else:
                                 print(str_for_print)
                         else:
-                            self.send_error()
+                            print_line = print_line.split()
+                            self.solve_expression(print_line)
                 else:
                     break
             print("Interpeter Debug:")
@@ -90,7 +91,7 @@ class interpreter:
         
     def get_var(self, variable_name):
         try:
-            var = self.value_stack[self.variable_stack[self.var_to_id[variable_name]].valeu_stack_index]
+            var = self.value_stack[self.variable_stack[self.var_to_id[variable_name]].value_stack_index]
         except KeyError:
             var = None
         return var
@@ -119,18 +120,19 @@ class interpreter:
     def use_value(self, value, expected_type):
         if value in self.var_to_id:
             use_value = self.value_stack[self.var_to_id[value]]
-            if self.value_type_stack[self.var_to_id[value]] != expected_type:
+            if self.value_type_stack[self.var_to_id[value]] != str(expected_type):
                 use_value = None
         else:
             use_value = value
-            if self.get_type(use_value) != expected_type:
+            if self.get_type(use_value) != str(expected_type):
                 print("f")
                 use_value = None
             if expected_type == int:
                 use_value = int(use_value)
         return use_value
+    
     def get_type(self, value_type):
-        value_type_check = value_type
+        value_type_check = self.value_type_stack[value_type]
         value_type_check = int
         return value_type_check
     
