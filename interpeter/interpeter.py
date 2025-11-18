@@ -132,8 +132,8 @@ class interpreter:
         return use_value
     
     def get_type(self, value_type):
+        value_type = int(value_type)
         value_type_check = self.value_type_stack[value_type]
-        value_type_check = int
         return value_type_check
     
 interpreter_run = interpreter()
