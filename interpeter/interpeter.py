@@ -1,12 +1,19 @@
+from enum import StrEnum
+import os
+
 class Variable:
-    def __init__(self , type , name , value_stack_index , var_id):
+    def __init__(self , var_type , name , value_stack_index , var_id):
         self.name = name
         self.value_stack_index = value_stack_index
-        self.type = type
+        self.type = var_type
         self.var_id = var_id
 
+class InterpeterActions(StrEnum):
+    Run = "run"
+    Parse = "parse"
+    Done = "done"
 
-class interpreter:
+class Interpreter:
     def __init__(self):
         self.error = False
         self.value_stack = []
@@ -16,12 +23,36 @@ class interpreter:
         self.next_var_id = 0
     
     def run_code(self):
-        self.interpret_code("code.txt")
-    
-    def parse_code(self , lines_of_code: list[str]):
-        code_lines = []
-        for line in lines_of_code:
-            line = line.strip()  # <-- FIXED
+        langauge_is_running = True
+        while langauge_is_running:
+            command = input("What file to run:")
+            command_lst = command.split()
+            action = command_lst[0]
+            if action != InterpeterActions.Done.value:
+                file_use = command_lst[1]
+                if action == InterpeterActions.Parse.value:
+                    self.parse_code(file_use)
+                elif action == InterpeterActions.Run.value:
+                    if os.path.isfile(f"file_use.run"):
+                        self.interpret_code(file_use)
+                    else:
+                        self.parse_code(file_use)
+                        self.interpret_code(file_use)
+                else:
+                    print("unknown command")
+            elif action == InterpeterActions.Done.value:
+                return
+            else:
+                print("unknown command")
+    @staticmethod
+    def parse_code(lines_of_code: str):
+        code_lines = [] #for the return code lines
+        read_lines = []
+        with open(F"{lines_of_code}.code", "r") as code_file:
+            for line in code_file:
+                read_lines.append(line)
+        for line in read_lines:
+            line = line.strip()
             if not line:
                 continue
             
@@ -37,15 +68,17 @@ class interpreter:
                 expression = expression.replace(")" , " ")
                 code_lines[index] = expression
         
-        return code_lines
+        with open(f"{lines_of_code}.run", "w") as run_ready_file:
+            for line in code_lines:
+                run_ready_file.write(f"{line}\n")
     
     def interpret_code(self, file):
-        with open(file , "r") as code_file:
+        file_for_run = f"{file}.run"
+        with open(file_for_run , "r") as code_file:
             read_lines = []
             for line in code_file:
                 read_lines.append(line)
-            code_lines = self.parse_code(read_lines)
-            for line in code_lines:
+            for line in read_lines:
                 if not self.error:
                     if line.startswith("dec"):
                         line = line.split()
@@ -58,45 +91,54 @@ class interpreter:
                         if line[2] != "=":
                             self.send_error()
                             break
+                        check = self.set_variable(line[1],line[2], line[4:])
+                        if check is None:
+                            self.send_error()
+                            break
                     elif line.startswith("print"):
                         line = line[len("print"):].strip()
                         check = self.print_expression(line)
                         if check is None:
                             self.send_error("Syntax Error")
+                            break
                     else:
                         self.send_error("Syntax Error")
+                        break
                 else:
+                    self.reset_interpeter()
                     break
     
     def pop_value(self):
-        type = self.value_type_stack.pop()
+        value_type = self.value_type_stack.pop()
         var = self.value_stack.pop()
-        return type , var
+        return value_type , var
     
-    def push_value(self , type , value):
-        self.value_type_stack.append(type)
+    def push_value(self , value_type , value):
+        self.value_type_stack.append(value_type)
         self.value_stack.append(value)
     
     def get_value(self , value_stack_index: int):
         value = self.value_stack[value_stack_index]
-        type = self.value_type_stack[value_stack_index]
-        return type , value
+        value_type = self.value_type_stack[value_stack_index]
+        return value_type , value
     
-    def set_value(self , value_stack_index: int , type , value):
-        if type != self.value_type_stack[value_stack_index]:
+    def set_value(self , value_stack_index: int , value_type , value):
+        if value_type != self.value_type_stack[value_stack_index]:
             self.send_error("Type Error")
             return None
         self.value_stack[value_stack_index] = value
         return True
     
-    def dec_variable(self , type , name , value):
-        var: Variable = Variable(type , name , len(self.value_stack) , self.next_var_id)
+    def dec_variable(self , value_type , name , value):
+        var: Variable = Variable(value_type , name , len(self.value_stack) , self.next_var_id)
         self.next_var_id += 1
         check = self.solve_expression(value)
+        if check is None:
+            self.send_error()
         self.variables.append(var)
         self.variable_names_to_id[name] = var.var_id
         value = self.pop_value()
-        self.push_value(type , value[1])
+        self.push_value(value_type , value[1])
     
     def get_variable(self , value_type: str , name: str):
         var_id = self.variable_names_to_id.get(name)
@@ -109,21 +151,36 @@ class interpreter:
             return None
         return var
     
+    def set_variable(self, value_type, name, expression):
+        error = False
+        var: Variable = self.get_variable(value_type,name)
+        if var is None:
+            error = True
+        check = self.solve_expression(expression)
+        if check is None:
+            error = True
+        set_value = self.pop_value()[1]
+        self.set_value(var.value_stack_index, name, set_value)
+        if error:
+            return None
+        else:
+            return True
+    
     def print_expression(self , expression):
-        Error: bool = False
+        error: bool = False
         expression = expression.split()
         check = self.solve_expression(expression)
         if check is None:
-            Error = True
-        if Error:
+            error = True
+        if error:
             return None
         else:
             print(self.pop_value()[1])
             return True
     
     def solve_expression(self , expression):
-        Error: bool = False
-        posible_opperators = ["+" , "-" , "*" , "/" , "%" , ">>" , "<<"]
+        error: bool = False
+        possible_opperators = ["+" , "-" , "*" , "/" , "%" , ">>" , "<<"]
         opperator_stack = []
         if 1 == len(expression):
             if expression[0].lstrip("-").isdigit():
@@ -135,10 +192,10 @@ class interpreter:
                     var_value = var_value[1]
                     self.push_value("int" , var_value)
                 else:
-                    Error = True
+                    error = True
         else:
             for value in expression:
-                if value in posible_opperators:
+                if value in possible_opperators:
                     opperator_stack.append(value)
                 elif value.lstrip("-").isdigit():
                     self.push_value("int" , value)
@@ -149,12 +206,12 @@ class interpreter:
                         var_value = var_value[1]
                         self.push_value("int" , var_value)
                     else:
-                        Error = True
+                        error = True
                         break
                 else:
-                    Error = True
+                    error = True
                     break
-            if not Error:
+            if not error:
                 val_first = self.pop_value()[1]
                 result: int = int(val_first)
                 result_str:str = ""
@@ -177,11 +234,11 @@ class interpreter:
                     elif opperator == "<<":
                         result = result << val
                     else:
-                        Error = True
+                        error = True
                         break
                     result_str:str = str(result)
                 self.push_value("int",result_str)
-        if Error:
+        if error:
             return None
         else:
             return True
@@ -191,7 +248,15 @@ class interpreter:
         if error_message:
             print(error_message)
         else:
-            print("An error has occured")
+            print("An error has occurred")
             
-interpreter_run = interpreter()
+    def reset_interpeter(self):
+        self.error = False
+        self.value_stack = []
+        self.value_type_stack = []
+        self.variables = []
+        self.variable_names_to_id = {}
+        self.next_var_id = 0
+            
+interpreter_run = Interpreter()
 interpreter_run.run_code()
