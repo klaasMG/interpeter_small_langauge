@@ -1,5 +1,7 @@
 from enum import StrEnum
 import os
+from operator import index
+
 
 class Variable:
     def __init__(self , var_type , name , value_stack_index , var_id):
@@ -7,6 +9,12 @@ class Variable:
         self.value_stack_index = value_stack_index
         self.type = var_type
         self.var_id = var_id
+        
+class VOVNode:
+    def __init__(self , left_value , right_value , operator):
+        self.left_value: VOVNode | str = left_value
+        self.right_value: VOVNode | str= right_value
+        self.operator: str = operator
 
 class InterpeterActions(StrEnum):
     Run = "run"
@@ -224,30 +232,51 @@ class Interpreter:
                     opperator = opperator_stack.pop()
                     val = self.pop_value()[1]
                     val = int(val)
-                    if opperator == "+":
-                        result = result + val
-                    elif opperator == "-":
-                        result = result - val
-                    elif opperator == "*":
-                        result = result * val
-                    elif opperator == "/":
-                        result = result // val
-                    elif opperator == "%":
-                        result = result % val
-                    elif opperator == ">>":
-                        result = result >> val
-                    elif opperator == "<<":
-                        result = result << val
-                    else:
-                        error = True
-                        break
+                    result = self.solve_vov_expression(int(result),opperator,int(val))
                     result_str:str = str(result)
                 self.push_value("int",result_str)
         if error:
             return None
         else:
             return True
+        
+    def build_vov_tree(self,opp_stack):
+        opp_precedence_indecies: list[int] = []
+        opp_stack = opp_stack
+        while not all(x is None for x in opp_stack):
+            index = self.find_highest_opp_index(opp_stack)
+            opp_stack[index] = None
+            opp_precedence_indecies.append(index)
     
+    @staticmethod
+    def solve_vov_expression(value1, opp, value2):
+        if opp == "+":
+            result = value1 + value2
+        elif opp == "-":
+            result = value1 - value2
+        elif opp == "*":
+            result = value1 * value2
+        elif opp == "/":
+            result = value1 // value2
+        elif opp == "%":
+            result = value1 % value2
+        elif opp == ">>":
+            result = value1 >> value2
+        elif opp == "<<":
+            result = value1 << value2
+        else:
+            result = None
+        return result
+    
+    @staticmethod
+    def find_highest_opp_index(opp_stack):
+        index = 0
+        for index,i in enumerate(opp_stack):
+            if i == "*" or i == "/":
+                break
+        return index
+        
+        
     def send_error(self , error_message: str | None = None):
         self.error = True
         if error_message:
