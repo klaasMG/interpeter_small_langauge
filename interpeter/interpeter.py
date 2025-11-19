@@ -247,6 +247,7 @@ class Interpreter:
             index = self.find_highest_opp_index(opp_stack)
             opp_stack[index] = None
             opp_precedence_indecies.append(index)
+        return  opp_precedence_indecies
     
     @staticmethod
     def solve_vov_expression(value1, opp, value2):
