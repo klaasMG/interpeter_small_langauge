@@ -8,16 +8,14 @@ class Variable:
         self.type = var_type
         self.var_id = var_id
 
-class VOVNode:
-    def __init__(self , left_value , right_value , operator):
-        self.left_value: VOVNode | str = left_value
-        self.right_value: VOVNode | str = right_value
-        self.operator: str = operator
-
 class InterpeterActions(StrEnum):
     Run = "run"
     Parse = "parse"
     Done = "done"
+    
+class Types(StrEnum):
+    Int = "int"
+    Bool = "bool"
 
 class Interpreter:
     def __init__(self):
@@ -127,23 +125,45 @@ class Interpreter:
         return value_type , value
     
     def set_value(self , value_stack_index: int , value_type , value):
-        if value_type != self.value_type_stack[value_stack_index]:
-            self.send_error("Type Error")
+        if self.compare_type(value_type, value_stack_index):
+            self.value_stack[value_stack_index] = value
+            return True
+        else:
             return None
-        self.value_stack[value_stack_index] = value
+    
+    def get_type(self, value_stack_index):
+        type_return = self.value_stack[value_stack_index]
+        return type_return
+    
+    def compare_type(self, expected_type, value_stack_index):
+        type_check = self.get_type(value_stack_index)
+        if type_check != expected_type:
+            return False
         return True
+    
+    @staticmethod
+    def possible_type(type_check):
+        if type_check in Types:
+            return True
+        else:
+            return False
     
     def dec_variable(self , value_type , name , value):
         var: Variable = Variable(value_type , name , len(self.value_stack) , self.next_var_id)
         self.next_var_id += 1
-        check = self.solve_expression(value)
+        check = self.solve_expression(value, value_type)
         if check is None:
             self.send_error()
             return None
         self.variables.append(var)
         self.variable_names_to_id[name] = var.var_id
         value = self.pop_value()
+        check_type = self.possible_type(value_type)
+        if not check_type:
+            self.send_error()
+            return None
         self.push_value(value_type , value[1])
+        return True
     
     def get_variable(self , value_type: str , name: str):
         var_id = self.variable_names_to_id.get(name)
@@ -151,8 +171,8 @@ class Interpreter:
             self.send_error(f"Variable {name} not found")
             return None
         var = self.variables[var_id]
-        if var.type != value_type:
-            self.send_error(f"Type Error: Expected {value_type}, got {var.type}")
+        if not self.compare_type(value_type, var.value_stack_index):
+            self.send_error()
             return None
         return var
     
@@ -162,7 +182,11 @@ class Interpreter:
         if var is None:
             error = True
             return None
-        check = self.solve_expression(expression)
+        
+        if not self.compare_type(value_type, var.value_stack_index):
+            self.send_error()
+            return None
+        check = self.solve_expression(expression, value_type)
         if check is None:
             error = True
             return None
@@ -176,30 +200,39 @@ class Interpreter:
     def print_expression(self , expression):
         error: bool = False
         expression = expression.split()
-        check = self.solve_expression(expression)
-        if check is None:
-            error = True
-            return None
-        if error:
-            return None
-        else:
+        check = self.solve_expression_int(expression)
+        check_bool = self.solve_expression_boolean(expression)
+        if (check is not None) or (check_bool is not None):
             print(self.pop_value()[1])
             return True
+        else:
+            self.send_error()
+            return None
+        
+    def solve_expression(self, expression, expr_type):
+        if expr_type == Types.Int:
+            self.solve_expression_int(expression)
+            return True
+        elif expr_type == Types.Bool:
+            self.solve_expression_boolean(expression)
+            return True
+        else:
+            return None
     
-    def solve_expression(self , expression):
+    def solve_expression_int(self , expression):
         error: bool = False
         possible_opperators = ["+" , "-" , "*" , "/" , "%" , ">>" , "<<"]
         opperator_stack = []
         value_stack_opp = []
         if 1 == len(expression):
             if expression[0].lstrip("-").isdigit():
-                self.push_value("int" , expression[0])
+                self.push_value(Types.Int , expression[0])
             elif expression[0] in self.variable_names_to_id:
-                var = self.get_variable("int" , expression[0])
+                var = self.get_variable(Types.Int , expression[0])
                 if var is not None:
                     var_value = self.get_value(var.value_stack_index)
                     var_value = var_value[1]
-                    self.push_value("int" , var_value)
+                    self.push_value(Types.Int , var_value)
                 else:
                     error = True
                     return None
@@ -210,7 +243,7 @@ class Interpreter:
                 elif value.lstrip("-").isdigit():
                     value_stack_opp.append(value)
                 elif value in self.variable_names_to_id:
-                    var = self.get_variable("int" , value)
+                    var = self.get_variable(Types.Int , value)
                     if var is not None:
                         var_value = self.get_value(var.value_stack_index)
                         var_value = var_value[1]
@@ -255,30 +288,45 @@ class Interpreter:
                     value_stack_opp[operation + 1] = f"r{result_stack_len}"
                     result_stack_len += 1
                 result = result_stack[-1]
-                self.push_value("int", result)
+                self.push_value(Types.Int, result)
         if error:
             return None
         else:
             return True
+        
+    def solve_expression_boolean(self, expression):
+        if len(expression) == 1:
+            if expression[0] == "False" or expression[0] == "True":
+                self.push_value(Types.Int , expression[0])
+                return True
+            elif expression[0] in self.variable_names_to_id:
+                var = self.get_variable(Types.Bool , expression[0])
+                if var is not None:
+                    var_value = self.get_value(var.value_stack_index)
+                    var_value = var_value[1]
+                    self.push_value(Types.Int , var_value)
+                    return True
+                else:
+                    error = True
+                    return None
+            else:
+                return None
     
     @staticmethod
     def build_vov_tree(opp_stack):
         # Work on a copy so we don't destroy the original
-        ops = opp_stack.copy()
+        ops = deepcopy(opp_stack)
         order = []
-        
         # operator precedence groups, in descending priority
         precedence_groups = [
             ["*" , "/" , "%"] ,
             ["+" , "-"] ,
             [">>" , "<<"] ,
         ]
-        
         for group in precedence_groups:
             for i , op in enumerate(ops):
                 if op in group:
                     order.append(i)
-        
         return order
     
     @staticmethod
@@ -302,18 +350,6 @@ class Interpreter:
         else:
             return None
         return str(result)
-    
-    @staticmethod
-    def find_highest_opp_index(opp_stack):
-        index = 0
-        for index , i in enumerate(opp_stack):
-            if i == "*" or i == "/":
-                break
-            elif not (("*" in opp_stack) or ("/" in opp_stack)):
-                if i is None:
-                    continue
-                break
-        return index
     
     def send_error(self , error_message: str | None = None):
         self.error = True
