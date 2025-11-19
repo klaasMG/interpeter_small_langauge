@@ -46,8 +46,8 @@ class Interpreter:
             else:
                 print("unknown command")
     
-    @staticmethod
-    def parse_code(lines_of_code: str):
+    def parse_code(self, lines_of_code: str):
+        
         code_lines = []  # for the return code lines
         read_lines = []
         with open(F"{lines_of_code}.code" , "r") as code_file:
@@ -70,9 +70,91 @@ class Interpreter:
                 expression = expression.replace(")" , " ")
                 code_lines[index] = expression
         
+        for index, line in enumerate(code_lines):
+            line:str = line
+            if line.startswith("print"):
+                expr: list = line.split()
+                expr: list = expr[1:]
+                operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
+                operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
+                operation = self.parse_expression(expr , operators , operator_precedence)
+                replace = " ".join(expr)
+                line = line.replace(replace , operation)
+            elif line.startswith("set") or line.startswith("dec"):
+                expr: list = line.split()
+                expr: list = expr[4:]
+                operator_precedence = [["*" , "/" , "%"] ,["+" , "-"] ,[">>" , "<<"],]
+                operators = ["*" , "/" , "%","+" , "-",">>" , "<<"]
+                operation = self.parse_expression(expr,operators,operator_precedence)
+                replace = " ".join(expr)
+                line = line.replace(replace, operation)
+            else:
+                line = line
+            code_lines[index] = line
+        
         with open(f"{lines_of_code}.run" , "w") as run_ready_file:
             for line in code_lines:
                 run_ready_file.write(f"{line}\n")
+    
+    def parse_expression(self , tokens: list[str] , operators: list[str], operator_precedence: list[list[str]]):
+        # separate nums and ops WITH THEIR ORIGINAL POSITIONS
+        ops = []
+        for i , tok in enumerate(tokens):
+            if tok in operators:
+                ops.append(i)
+        
+        # reorder ops by precedence
+        ordered_ops = self.build_vov_tree([tokens[i] for i in ops] , operator_precedence)
+        
+        # build (val, opp, val) groups in correct evaluation order
+        result = []
+        results_stack = []  # for "r0", "r1", ...
+        
+        for op_index in ordered_ops:
+            tok_pos = ops[op_index]  # position in tokens
+            left_tok = tokens[tok_pos - 1]
+            right_tok = tokens[tok_pos + 1]
+            opp = tokens[tok_pos]
+            
+            # replace left with result ref if needed
+            if left_tok.startswith("r"):
+                left = left_tok
+            else:
+                left = left_tok
+            
+            # replace right with result ref if needed
+            if right_tok.startswith("r"):
+                right = right_tok
+            else:
+                right = right_tok
+            
+            result.append([left , opp , right])
+            
+            # store result reference for later replacements
+            result_ref = f"r{len(results_stack)}"
+            results_stack.append(result_ref)
+            
+            # rewrite tokens so later operations see the rX
+            tokens[tok_pos] = result_ref
+            tokens[tok_pos - 1] = result_ref
+            tokens[tok_pos + 1] = result_ref
+        
+        return self.vov_to_string(result)
+    
+    @staticmethod
+    def vov_to_string(vov_list):
+        return ",\n".join(str(item) for item in vov_list)
+    
+    @staticmethod
+    def build_vov_tree(opp_stack, precedence_groups):
+        # Work on a copy so we don't destroy the original
+        ops = deepcopy(opp_stack)
+        order = []
+        for group in precedence_groups:
+            for i , op in enumerate(ops):
+                if op in group:
+                    order.append(i)
+        return order
     
     def interpret_code(self , file):
         file_for_run = f"{file}.run"
@@ -80,7 +162,8 @@ class Interpreter:
             read_lines = []
             for line in code_file:
                 read_lines.append(line)
-            for line in read_lines:
+            for line_number, line in enumerate(read_lines):
+                self.line_number = line_number
                 if not self.error:
                     if line.startswith("dec"):
                         line = line.split()
@@ -91,11 +174,11 @@ class Interpreter:
                     elif line.startswith("set"):
                         line = line.split()
                         if line[3] != "=":
-                            self.send_error()
+                            self.send_error("1")
                             break
                         check = self.set_variable(line[1] , line[2] , line[4:])
                         if check is None:
-                            self.send_error()
+                            self.send_error("2")
                             break
                     elif line.startswith("print"):
                         line = line[len("print"):].strip()
@@ -132,7 +215,7 @@ class Interpreter:
             return None
     
     def get_type(self, value_stack_index):
-        type_return = self.value_stack[value_stack_index]
+        type_return = self.value_type_stack[value_stack_index]
         return type_return
     
     def compare_type(self, expected_type, value_stack_index):
@@ -153,14 +236,14 @@ class Interpreter:
         self.next_var_id += 1
         check = self.solve_expression(value, value_type)
         if check is None:
-            self.send_error()
+            self.send_error("3")
             return None
         self.variables.append(var)
         self.variable_names_to_id[name] = var.var_id
         value = self.pop_value()
         check_type = self.possible_type(value_type)
         if not check_type:
-            self.send_error()
+            self.send_error("4")
             return None
         self.push_value(value_type , value[1])
         return True
@@ -172,7 +255,7 @@ class Interpreter:
             return None
         var = self.variables[var_id]
         if not self.compare_type(value_type, var.value_stack_index):
-            self.send_error()
+            self.send_error("5")
             return None
         return var
     
@@ -184,7 +267,7 @@ class Interpreter:
             return None
         
         if not self.compare_type(value_type, var.value_stack_index):
-            self.send_error()
+            self.send_error("6")
             return None
         check = self.solve_expression(expression, value_type)
         if check is None:
@@ -200,134 +283,13 @@ class Interpreter:
     def print_expression(self , expression):
         error: bool = False
         expression = expression.split()
-        check = self.solve_expression_int(expression)
-        check_bool = self.solve_expression_boolean(expression)
-        if (check is not None) or (check_bool is not None):
+        check = self.solve_expression(expression, Types.Int)
+        if check is not None:
             print(self.pop_value()[1])
             return True
         else:
-            self.send_error()
+            self.send_error("7")
             return None
-        
-    def solve_expression(self, expression, expr_type):
-        if expr_type == Types.Int:
-            self.solve_expression_int(expression)
-            return True
-        elif expr_type == Types.Bool:
-            self.solve_expression_boolean(expression)
-            return True
-        else:
-            return None
-    
-    def solve_expression_int(self , expression):
-        error: bool = False
-        possible_opperators = ["+" , "-" , "*" , "/" , "%" , ">>" , "<<"]
-        opperator_stack = []
-        value_stack_opp = []
-        if 1 == len(expression):
-            if expression[0].lstrip("-").isdigit():
-                self.push_value(Types.Int , expression[0])
-            elif expression[0] in self.variable_names_to_id:
-                var = self.get_variable(Types.Int , expression[0])
-                if var is not None:
-                    var_value = self.get_value(var.value_stack_index)
-                    var_value = var_value[1]
-                    self.push_value(Types.Int , var_value)
-                else:
-                    error = True
-                    return None
-        else:
-            for value in expression:
-                if value in possible_opperators:
-                    opperator_stack.append(value)
-                elif value.lstrip("-").isdigit():
-                    value_stack_opp.append(value)
-                elif value in self.variable_names_to_id:
-                    var = self.get_variable(Types.Int , value)
-                    if var is not None:
-                        var_value = self.get_value(var.value_stack_index)
-                        var_value = var_value[1]
-                        value_stack_opp.append(var_value)
-                    else:
-                        error = True
-                        break
-                else:
-                    error = True
-                    break
-            if not error:
-                opperator_stack.reverse()
-                value_stack_opp.reverse()
-                precedence = self.build_vov_tree(opperator_stack)
-                result_stack = []
-                result_stack_len = 0
-                print(f"value stack longer than opp stack{len(value_stack_opp) > len(opperator_stack)}")
-                for operation in precedence:
-                    operator = opperator_stack[operation]
-                    value1:str = value_stack_opp[operation]
-                    value_store1 = "pr"
-                    value_store2 = "pr"
-                    if value1.startswith("r"):
-                        value1 = value1.replace("r","")
-                        value_store1 = value1
-                        value1 = result_stack[int(value1)]
-                    value2:str = value_stack_opp[operation + 1]
-                    if value2.startswith("r"):
-                        value2 = value2.replace("r", "")
-                        value_store2 = value2
-                        value2 = result_stack[int(value2)]
-                    result = self.solve_vov_expression(value1, operator, value2)
-                    result_stack.append(result)
-                    for index, value in enumerate(value_stack_opp):
-                        value:str = value
-                        if value.startswith("r"):
-                            value_use = value.replace("r", "")
-                            if value_use == value_store1 or value_use == value_store2:
-                                value_use = f"r{result_stack_len}"
-                                value_stack_opp[index] = value_use
-                    value_stack_opp[operation] = f"r{result_stack_len}"
-                    value_stack_opp[operation + 1] = f"r{result_stack_len}"
-                    result_stack_len += 1
-                result = result_stack[-1]
-                self.push_value(Types.Int, result)
-        if error:
-            return None
-        else:
-            return True
-        
-    def solve_expression_boolean(self, expression):
-        if len(expression) == 1:
-            if expression[0] == "False" or expression[0] == "True":
-                self.push_value(Types.Int , expression[0])
-                return True
-            elif expression[0] in self.variable_names_to_id:
-                var = self.get_variable(Types.Bool , expression[0])
-                if var is not None:
-                    var_value = self.get_value(var.value_stack_index)
-                    var_value = var_value[1]
-                    self.push_value(Types.Int , var_value)
-                    return True
-                else:
-                    error = True
-                    return None
-            else:
-                return None
-    
-    @staticmethod
-    def build_vov_tree(opp_stack):
-        # Work on a copy so we don't destroy the original
-        ops = deepcopy(opp_stack)
-        order = []
-        # operator precedence groups, in descending priority
-        precedence_groups = [
-            ["*" , "/" , "%"] ,
-            ["+" , "-"] ,
-            [">>" , "<<"] ,
-        ]
-        for group in precedence_groups:
-            for i , op in enumerate(ops):
-                if op in group:
-                    order.append(i)
-        return order
     
     @staticmethod
     def solve_vov_expression(value1 , opp , value2):
@@ -353,6 +315,7 @@ class Interpreter:
     
     def send_error(self , error_message: str | None = None):
         self.error = True
+        print(f"error line:{self.line_number}")
         if error_message:
             print(error_message)
         else:
@@ -365,6 +328,7 @@ class Interpreter:
         self.variables = []
         self.variable_names_to_id = {}
         self.next_var_id = 0
+        self.line_number = 0
 
 
 interpreter_run = Interpreter()
