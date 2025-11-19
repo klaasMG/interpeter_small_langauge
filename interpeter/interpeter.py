@@ -311,7 +311,7 @@ class Interpreter:
             return None
     
     @staticmethod
-    def solve_vov_expression(value1 , opp , value2):
+    def solve_vov_expression_int(value1 , opp , value2):
         value1 = int(value1)
         value2 = int(value2)
         if opp == "+":
@@ -331,6 +331,23 @@ class Interpreter:
         else:
             return None
         return str(result)
+    
+    @staticmethod
+    def solve_vov_expression_bool(value1 , opp , value2):
+        value1 = int(value1)
+        value2 = int(value2)
+        if opp == "<":
+            result = value1 < value2
+        elif opp == "==":
+            result = value1 == value2
+        elif opp == ">":
+            result = value1 > value2
+        else:
+            return None
+        return str(result)
+        
+    def solve_expr(self,expression):
+        raise RuntimeError("the big new thing this time")
     
     def send_error(self , error_message: str | None = None):
         self.error = True
