@@ -1,5 +1,5 @@
+from copy import deepcopy
 from enum import StrEnum
-import os
 
 class Variable:
     def __init__(self , var_type , name , value_stack_index , var_id):
@@ -8,19 +8,16 @@ class Variable:
         self.type = var_type
         self.var_id = var_id
 
-
 class VOVNode:
     def __init__(self , left_value , right_value , operator):
         self.left_value: VOVNode | str = left_value
         self.right_value: VOVNode | str = right_value
         self.operator: str = operator
 
-
 class InterpeterActions(StrEnum):
     Run = "run"
     Parse = "parse"
     Done = "done"
-
 
 class Interpreter:
     def __init__(self):
@@ -42,11 +39,8 @@ class Interpreter:
                 if action == InterpeterActions.Parse.value:
                     self.parse_code(file_use)
                 elif action == InterpeterActions.Run.value:
-                    if os.path.isfile(f"file_use.run"):
-                        self.interpret_code(file_use)
-                    else:
-                        self.parse_code(file_use)
-                        self.interpret_code(file_use)
+                    self.parse_code(file_use)
+                    self.interpret_code(file_use)
                 else:
                     print("unknown command")
             elif action == InterpeterActions.Done.value:
@@ -220,7 +214,7 @@ class Interpreter:
                     if var is not None:
                         var_value = self.get_value(var.value_stack_index)
                         var_value = var_value[1]
-                        self.push_value("int" , var_value)
+                        value_stack_opp.append(var_value)
                     else:
                         error = True
                         break
@@ -230,35 +224,67 @@ class Interpreter:
             if not error:
                 opperator_stack.reverse()
                 value_stack_opp.reverse()
-                for value in value_stack_opp:
-                    self.push_value("int" , value)
                 precedence = self.build_vov_tree(opperator_stack)
-                val_first = self.pop_value()[1]
-                result: int = int(val_first)
-                result_str: str = ""
-                while len(opperator_stack) > 0:
-                    opperator = opperator_stack.pop()
-                    val = self.pop_value()[1]
-                    val = int(val)
-                    result = self.solve_vov_expression(int(result) , opperator , int(val))
-                    result_str: str = str(result)
-                self.push_value("int" , result_str)
+                result_stack = []
+                result_stack_len = 0
+                print(f"value stack longer than opp stack{len(value_stack_opp) > len(opperator_stack)}")
+                for operation in precedence:
+                    operator = opperator_stack[operation]
+                    value1:str = value_stack_opp[operation]
+                    value_store1 = "pr"
+                    value_store2 = "pr"
+                    if value1.startswith("r"):
+                        value1 = value1.replace("r","")
+                        value_store1 = value1
+                        value1 = result_stack[int(value1)]
+                    value2:str = value_stack_opp[operation + 1]
+                    if value2.startswith("r"):
+                        value2 = value2.replace("r", "")
+                        value_store2 = value2
+                        value2 = result_stack[int(value2)]
+                    result = self.solve_vov_expression(value1, operator, value2)
+                    result_stack.append(result)
+                    for index, value in enumerate(value_stack_opp):
+                        value:str = value
+                        if value.startswith("r"):
+                            value_use = value.replace("r", "")
+                            if value_use == value_store1 or value_use == value_store2:
+                                value_use = f"r{result_stack_len}"
+                                value_stack_opp[index] = value_use
+                    value_stack_opp[operation] = f"r{result_stack_len}"
+                    value_stack_opp[operation + 1] = f"r{result_stack_len}"
+                    result_stack_len += 1
+                result = result_stack[-1]
+                self.push_value("int", result)
         if error:
             return None
         else:
             return True
     
-    def build_vov_tree(self , opp_stack):
-        opp_precedence_indecies: list[int] = []
-        opp_stack = opp_stack
-        while not all(x is None for x in opp_stack):
-            index = self.find_highest_opp_index(opp_stack)
-            opp_stack[index] = None
-            opp_precedence_indecies.append(index)
-        return opp_precedence_indecies
+    @staticmethod
+    def build_vov_tree(opp_stack):
+        # Work on a copy so we don't destroy the original
+        ops = opp_stack.copy()
+        order = []
+        
+        # operator precedence groups, in descending priority
+        precedence_groups = [
+            ["*" , "/" , "%"] ,
+            ["+" , "-"] ,
+            [">>" , "<<"] ,
+        ]
+        
+        for group in precedence_groups:
+            for i , op in enumerate(ops):
+                if op in group:
+                    order.append(i)
+        
+        return order
     
     @staticmethod
     def solve_vov_expression(value1 , opp , value2):
+        value1 = int(value1)
+        value2 = int(value2)
         if opp == "+":
             result = value1 + value2
         elif opp == "-":
@@ -274,8 +300,8 @@ class Interpreter:
         elif opp == "<<":
             result = value1 << value2
         else:
-            result = None
-        return result
+            return None
+        return str(result)
     
     @staticmethod
     def find_highest_opp_index(opp_stack):
@@ -283,7 +309,7 @@ class Interpreter:
         for index , i in enumerate(opp_stack):
             if i == "*" or i == "/":
                 break
-            elif not ("*" in opp_stack or "/" in opp_stack):
+            elif not (("*" in opp_stack) or ("/" in opp_stack)):
                 if i is None:
                     continue
                 break
