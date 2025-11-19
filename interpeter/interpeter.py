@@ -253,7 +253,7 @@ class Interpreter:
     def dec_variable(self , value_type , name , value):
         var: Variable = Variable(value_type , name , len(self.value_stack) , self.next_var_id)
         self.next_var_id += 1
-        check = self.solve_expression(value, value_type)
+        check = self.solve_expression(value)
         if check is None:
             self.send_error("3")
             return None
@@ -288,7 +288,7 @@ class Interpreter:
         if not self.compare_type(value_type, var.value_stack_index):
             self.send_error("6")
             return None
-        check = self.solve_expression(expression, value_type)
+        check = self.solve_expression(expression)
         if check is None:
             error = True
             return None
@@ -302,7 +302,7 @@ class Interpreter:
     def print_expression(self , expression):
         error: bool = False
         expression = expression.split()
-        check = self.solve_expression(expression, Types.Int)
+        check = self.solve_expression(expression)
         if check is not None:
             print(self.pop_value()[1])
             return True
@@ -346,7 +346,7 @@ class Interpreter:
             return None
         return str(result)
         
-    def solve_expr(self,expression):
+    def solve_expression(self,expression):
         raise RuntimeError("the big new thing this time")
     
     def send_error(self , error_message: str | None = None):
