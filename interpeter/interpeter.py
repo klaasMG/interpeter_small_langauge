@@ -1,7 +1,5 @@
 from enum import StrEnum
 import os
-from operator import index
-
 
 class Variable:
     def __init__(self , var_type , name , value_stack_index , var_id):
