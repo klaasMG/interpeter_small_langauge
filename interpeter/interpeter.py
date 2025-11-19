@@ -73,21 +73,40 @@ class Interpreter:
         for index, line in enumerate(code_lines):
             line:str = line
             if line.startswith("print"):
+                bool_opp = ["<","=",">"]
+                is_bool = False
+                expr_start = "int"
+                for i in line:
+                    if i in bool_opp:
+                        is_bool = True
+                        expr_start = "bool"
+                if is_bool:
+                    operators = ["<","=",">"]
+                    operator_precedence = [["<","=",">"]]
+                else:
+                    operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
+                    operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
                 expr: list = line.split()
                 expr: list = expr[1:]
-                operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
-                operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
                 operation = self.parse_expression(expr , operators , operator_precedence)
                 replace = " ".join(expr)
                 line = line.replace(replace , operation)
+                line = line + " " + expr_start
             elif line.startswith("set") or line.startswith("dec"):
                 expr: list = line.split()
+                if expr[1] == "int":
+                    expr_start = "int"
+                    operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
+                    operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
+                else:
+                    expr_start = "bool"
+                    operator_precedence = [["<","==",">"]]
+                    operators = ["<","=",">"]
                 expr: list = expr[4:]
-                operator_precedence = [["*" , "/" , "%"] ,["+" , "-"] ,[">>" , "<<"],]
-                operators = ["*" , "/" , "%","+" , "-",">>" , "<<"]
                 operation = self.parse_expression(expr,operators,operator_precedence)
                 replace = " ".join(expr)
                 line = line.replace(replace, operation)
+                line = line + " " + expr_start
             else:
                 line = line
             code_lines[index] = line
