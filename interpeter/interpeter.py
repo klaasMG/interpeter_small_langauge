@@ -9,17 +9,20 @@ class Variable:
         self.value_stack_index = value_stack_index
         self.type = var_type
         self.var_id = var_id
-        
+
+
 class VOVNode:
     def __init__(self , left_value , right_value , operator):
         self.left_value: VOVNode | str = left_value
-        self.right_value: VOVNode | str= right_value
+        self.right_value: VOVNode | str = right_value
         self.operator: str = operator
+
 
 class InterpeterActions(StrEnum):
     Run = "run"
     Parse = "parse"
     Done = "done"
+
 
 class Interpreter:
     def __init__(self):
@@ -52,11 +55,12 @@ class Interpreter:
                 return
             else:
                 print("unknown command")
+    
     @staticmethod
     def parse_code(lines_of_code: str):
-        code_lines = [] #for the return code lines
+        code_lines = []  # for the return code lines
         read_lines = []
-        with open(F"{lines_of_code}.code", "r") as code_file:
+        with open(F"{lines_of_code}.code" , "r") as code_file:
             for line in code_file:
                 read_lines.append(line)
         for line in read_lines:
@@ -76,11 +80,11 @@ class Interpreter:
                 expression = expression.replace(")" , " ")
                 code_lines[index] = expression
         
-        with open(f"{lines_of_code}.run", "w") as run_ready_file:
+        with open(f"{lines_of_code}.run" , "w") as run_ready_file:
             for line in code_lines:
                 run_ready_file.write(f"{line}\n")
     
-    def interpret_code(self, file):
+    def interpret_code(self , file):
         file_for_run = f"{file}.run"
         with open(file_for_run , "r") as code_file:
             read_lines = []
@@ -96,10 +100,10 @@ class Interpreter:
                         self.dec_variable(line[1] , line[2] , line[4:])
                     elif line.startswith("set"):
                         line = line.split()
-                        if line[2] != "=":
+                        if line[3] != "=":
                             self.send_error()
                             break
-                        check = self.set_variable(line[1],line[2], line[4:])
+                        check = self.set_variable(line[1] , line[2] , line[4:])
                         if check is None:
                             self.send_error()
                             break
@@ -143,6 +147,7 @@ class Interpreter:
         check = self.solve_expression(value)
         if check is None:
             self.send_error()
+            return None
         self.variables.append(var)
         self.variable_names_to_id[name] = var.var_id
         value = self.pop_value()
@@ -159,16 +164,18 @@ class Interpreter:
             return None
         return var
     
-    def set_variable(self, value_type, name, expression):
+    def set_variable(self , value_type , name , expression):
         error = False
-        var: Variable = self.get_variable(value_type,name)
+        var: Variable = self.get_variable(value_type , name)
         if var is None:
             error = True
+            return None
         check = self.solve_expression(expression)
         if check is None:
             error = True
+            return None
         set_value = self.pop_value()[1]
-        self.set_value(var.value_stack_index, name, set_value)
+        self.set_value(var.value_stack_index , value_type , set_value)
         if error:
             return None
         else:
@@ -180,6 +187,7 @@ class Interpreter:
         check = self.solve_expression(expression)
         if check is None:
             error = True
+            return None
         if error:
             return None
         else:
@@ -202,6 +210,7 @@ class Interpreter:
                     self.push_value("int" , var_value)
                 else:
                     error = True
+                    return None
         else:
             for value in expression:
                 if value in possible_opperators:
@@ -224,34 +233,34 @@ class Interpreter:
                 opperator_stack.reverse()
                 value_stack_opp.reverse()
                 for value in value_stack_opp:
-                    self.push_value("int", value)
+                    self.push_value("int" , value)
                 precedence = self.build_vov_tree(opperator_stack)
                 val_first = self.pop_value()[1]
                 result: int = int(val_first)
-                result_str:str = ""
+                result_str: str = ""
                 while len(opperator_stack) > 0:
                     opperator = opperator_stack.pop()
                     val = self.pop_value()[1]
                     val = int(val)
-                    result = self.solve_vov_expression(int(result),opperator,int(val))
-                    result_str:str = str(result)
-                self.push_value("int",result_str)
+                    result = self.solve_vov_expression(int(result) , opperator , int(val))
+                    result_str: str = str(result)
+                self.push_value("int" , result_str)
         if error:
             return None
         else:
             return True
-        
-    def build_vov_tree(self,opp_stack):
+    
+    def build_vov_tree(self , opp_stack):
         opp_precedence_indecies: list[int] = []
         opp_stack = opp_stack
         while not all(x is None for x in opp_stack):
             index = self.find_highest_opp_index(opp_stack)
             opp_stack[index] = None
             opp_precedence_indecies.append(index)
-        return  opp_precedence_indecies
+        return opp_precedence_indecies
     
     @staticmethod
-    def solve_vov_expression(value1, opp, value2):
+    def solve_vov_expression(value1 , opp , value2):
         if opp == "+":
             result = value1 + value2
         elif opp == "-":
@@ -273,19 +282,22 @@ class Interpreter:
     @staticmethod
     def find_highest_opp_index(opp_stack):
         index = 0
-        for index,i in enumerate(opp_stack):
+        for index , i in enumerate(opp_stack):
             if i == "*" or i == "/":
                 break
+            elif not ("*" in opp_stack or "/" in opp_stack):
+                if i is None:
+                    continue
+                break
         return index
-        
-        
+    
     def send_error(self , error_message: str | None = None):
         self.error = True
         if error_message:
             print(error_message)
         else:
             print("An error has occurred")
-            
+    
     def reset_interpeter(self):
         self.error = False
         self.value_stack = []
@@ -293,6 +305,7 @@ class Interpreter:
         self.variables = []
         self.variable_names_to_id = {}
         self.next_var_id = 0
-            
+
+
 interpreter_run = Interpreter()
 interpreter_run.run_code()
