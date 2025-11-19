@@ -225,6 +225,7 @@ class Interpreter:
                 value_stack_opp.reverse()
                 for value in value_stack_opp:
                     self.push_value("int", value)
+                precedence = self.build_vov_tree(opperator_stack)
                 val_first = self.pop_value()[1]
                 result: int = int(val_first)
                 result_str:str = ""
