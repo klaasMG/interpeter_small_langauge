@@ -1,2 +1,3 @@
-dec int x = 1 - 2;
+dec int x = 1 - 3;
+dec int f = x;
 print(x)

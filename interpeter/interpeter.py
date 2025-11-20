@@ -1,5 +1,6 @@
-from copy import deepcopy
-from enum import StrEnum
+from enum import StrEnum, Enum, auto
+from int_expr_parser import ExprParser
+from tokenizer import Tokenizer, Tokens, KeyWords, Token
 
 class Variable:
     def __init__(self , var_type , name , value_stack_index , var_id):
@@ -13,16 +14,15 @@ class InterpeterActions(StrEnum):
     Parse = "parse"
     Done = "done"
     
-class Types(StrEnum):
-    Int = "int"
-    Bool = "bool"
+class Types(Enum):
+    Int = auto()
 
 class Interpreter:
     def __init__(self):
         self.error = False
-        self.value_stack = []
-        self.value_type_stack = []
-        self.variables = []
+        self.value_stack: list[str] = []
+        self.value_type_stack: list[Types] = []
+        self.variables: list[Variable] = []
         self.variable_names_to_id = {}
         self.next_var_id = 0
     
@@ -34,11 +34,10 @@ class Interpreter:
             action = command_lst[0]
             if action != InterpeterActions.Done.value:
                 file_use = command_lst[1]
-                if action == InterpeterActions.Parse.value:
-                    self.parse_code(file_use)
-                elif action == InterpeterActions.Run.value:
-                    self.parse_code(file_use)
-                    self.interpret_code(file_use)
+                if action == InterpeterActions.Run.value:
+                    tokenizer = Tokenizer(f"{file_use}.code")
+                    tokens = tokenizer.tokenize()
+                    self.interpret_code(tokens)
                 else:
                     print("unknown command")
             elif action == InterpeterActions.Done.value:
@@ -46,309 +45,167 @@ class Interpreter:
             else:
                 print("unknown command")
     
-    def parse_code(self, lines_of_code: str):
-        
-        code_lines = []  # for the return code lines
-        read_lines = []
-        with open(F"{lines_of_code}.code" , "r") as code_file:
-            for line in code_file:
-                read_lines.append(line)
-        for line in read_lines:
-            line = line.strip()
-            if not line:
-                continue
-            
-            parts = line.split(";")
-            for p in parts:
-                p = p.strip()
-                if p:
-                    code_lines.append(p)
-        
-        for index , expression in enumerate(code_lines):
-            if expression.startswith("print("):
-                expression = expression.replace("(" , " ")
-                expression = expression.replace(")" , " ")
-                code_lines[index] = expression
-        
-        for index, line in enumerate(code_lines):
-            line:str = line
-            if line.startswith("print"):
-                bool_opp = ["<","=",">"]
-                is_bool = False
-                expr_start = "int"
-                for i in line:
-                    if i in bool_opp:
-                        is_bool = True
-                        expr_start = "bool"
-                if is_bool:
-                    operators = ["<","=",">"]
-                    operator_precedence = [["<","=",">"]]
-                else:
-                    operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
-                    operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
-                expr: list = line.split()
-                expr: list = expr[1:]
-                operation = self.parse_expression(expr , operators , operator_precedence)
-                replace = " ".join(expr)
-                line = line.replace(replace , operation)
-                line = line + " " + expr_start
-            elif line.startswith("set") or line.startswith("dec"):
-                expr: list = line.split()
-                if expr[1] == "int":
-                    expr_start = "int"
-                    operator_precedence = [["*" , "/" , "%"] , ["+" , "-"] , [">>" , "<<"] , ]
-                    operators = ["*" , "/" , "%" , "+" , "-" , ">>" , "<<"]
-                else:
-                    expr_start = "bool"
-                    operator_precedence = [["<","==",">"]]
-                    operators = ["<","=",">"]
-                expr: list = expr[4:]
-                operation = self.parse_expression(expr,operators,operator_precedence)
-                replace = " ".join(expr)
-                line = line.replace(replace, operation)
-                line = line + " " + expr_start
-            else:
-                line = line
-            code_lines[index] = line
-        
-        with open(f"{lines_of_code}.run" , "w") as run_ready_file:
-            for line in code_lines:
-                run_ready_file.write(f"{line}\n")
-    
-    def parse_expression(self , tokens: list[str] , operators: list[str], operator_precedence: list[list[str]]):
-        # separate nums and ops WITH THEIR ORIGINAL POSITIONS
-        ops = []
-        for i , tok in enumerate(tokens):
-            if tok in operators:
-                ops.append(i)
-        
-        # reorder ops by precedence
-        ordered_ops = self.build_vov_tree([tokens[i] for i in ops] , operator_precedence)
-        
-        # build (val, opp, val) groups in correct evaluation order
-        result = []
-        results_stack = []  # for "r0", "r1", ...
-        
-        for op_index in ordered_ops:
-            tok_pos = ops[op_index]  # position in tokens
-            left_tok = tokens[tok_pos - 1]
-            right_tok = tokens[tok_pos + 1]
-            opp = tokens[tok_pos]
-            
-            # replace left with result ref if needed
-            if left_tok.startswith("r"):
-                left = left_tok
-            else:
-                left = left_tok
-            
-            # replace right with result ref if needed
-            if right_tok.startswith("r"):
-                right = right_tok
-            else:
-                right = right_tok
-            
-            result.append([left , opp , right])
-            
-            # store result reference for later replacements
-            result_ref = f"r{len(results_stack)}"
-            results_stack.append(result_ref)
-            
-            # rewrite tokens so later operations see the rX
-            tokens[tok_pos] = result_ref
-            tokens[tok_pos - 1] = result_ref
-            tokens[tok_pos + 1] = result_ref
-        
-        return self.vov_to_string(result)
-    
-    @staticmethod
-    def vov_to_string(vov_list):
-        return ",\n".join(str(item) for item in vov_list)
-    
-    @staticmethod
-    def build_vov_tree(opp_stack, precedence_groups):
-        # Work on a copy so we don't destroy the original
-        ops = deepcopy(opp_stack)
-        order = []
-        for group in precedence_groups:
-            for i , op in enumerate(ops):
-                if op in group:
-                    order.append(i)
-        return order
-    
-    def interpret_code(self , file):
-        file_for_run = f"{file}.run"
-        with open(file_for_run , "r") as code_file:
-            read_lines = []
-            for line in code_file:
-                read_lines.append(line)
-            for line_number, line in enumerate(read_lines):
-                self.line_number = line_number
-                if not self.error:
-                    if line.startswith("dec"):
-                        line = line.split()
-                        if line[3] != "=":
-                            self.send_error("Syntax Error")
-                            break
-                        self.dec_variable(line[1] , line[2] , line[4:])
-                    elif line.startswith("set"):
-                        line = line.split()
-                        if line[3] != "=":
-                            self.send_error("1")
-                            break
-                        check = self.set_variable(line[1] , line[2] , line[4:])
-                        if check is None:
-                            self.send_error("2")
-                            break
-                    elif line.startswith("print"):
-                        line = line[len("print"):].strip()
-                        check = self.print_expression(line)
-                        if check is None:
-                            self.send_error("Syntax Error")
-                            break
-                    else:
-                        self.send_error("Syntax Error")
-                        break
-                else:
-                    self.reset_interpeter()
+    def interpret_code(self , tokens):
+        token_to_read = 0
+        def next_token():
+            nonlocal token_to_read
+            token_to_read += 1
+            return tokens[token_to_read]
+        def invalid_token():
+            nonlocal token_to_read
+            token_to_read -= 1
+        while token_to_read < len(tokens):
+            token = next_token()
+            if token.token_type == KeyWords.Dec:
+                var_type = next_token()
+                var_name = next_token()
+                equals = next_token()
+                if equals != Tokens.Equal:
+                    self.send_error()
                     break
+                expr: list[Token] = []
+                is_valid = True
+                while is_valid:
+                    token = next_token()
+                    if token.token_type == Tokens.SemiColon:
+                        is_valid = False
+                    else:
+                        expr.append(token)
+                invalid_token()
+                result = self.solve_expression(expr)
+                for value_type in Types:
+                    if value_type.value == var_type:
+                        var_type = value_type
+                        break
+                self.dec_variable(var_type, result,var_name)
+            elif token.token_type == KeyWords.Set:
+                var_name = next_token()
+                var_use = self.get_variable_by_name(var_name)
+                var_type = var_use.type
+                equals = next_token()
+                expr: list[Token] = []
+                is_valid = True
+                while is_valid:
+                    token = next_token()
+                    if token.token_type == Tokens.SemiColon:
+                        is_valid = False
+                    else:
+                        expr.append(token)
+                invalid_token()
+                result = self.solve_expression(expr)
+                for value_type in Types:
+                    if value_type.value == var_type:
+                        var_type = value_type
+                        break
+                self.set_variable(var_type , result , var_name)
+            elif token.token_type == KeyWords.Print:
+                left_parentece = next_token()
+                if left_parentece != Tokens.LeftParentce:
+                    self.send_error()
+                    break
+                expr: list[Token] = []
+                is_valid = True
+                while is_valid:
+                    token = next_token()
+                    if token.token_type == Tokens.SemiColon or token.token_type == Tokens.RightParentce:
+                        is_valid = False
+                    else:
+                        expr.append(token)
+                invalid_token()
+                right_parentece = next_token()
+                if right_parentece != Tokens.RightParentce:
+                    self.send_error()
+                    break
+            semi_colon = next_token()
+            if semi_colon != Tokens.SemiColon:
+                self.send_error()
+                break
     
-    def pop_value(self):
-        value_type = self.value_type_stack.pop()
-        var = self.value_stack.pop()
-        return value_type , var
+    def solve_expression(self , expr: list[Token]):
+        parser = ExprParser(expr)
+        ast = parser.parse_expr()
+        result = self.eval_ast(ast)
+        return str(result)
     
-    def push_value(self , value_type , value):
-        self.value_type_stack.append(value_type)
+    def eval_ast(self , node):
+        if isinstance(node , int):
+            return node
+        
+        if isinstance(node , tuple):
+            op = node[0]
+            
+            # variable lookup
+            if op == "var":
+                var = self.get_variable_by_name(node[1])
+                if var is None:
+                    self.send_error(f"Unknown variable {node[1]}")
+                    return 0
+                _ , val_str = self.get_value(var.value_stack_index)
+                return int(val_str)
+            
+            # arithmetic
+            left = self.eval_ast(node[1])
+            right = self.eval_ast(node[2])
+            
+            if op == "+": return left + right
+            if op == "-": return left - right
+            if op == "*": return left * right
+            if op == "/": return left // right  # integer division
+        
+        raise Exception("Unknown AST node")
+            
+    def push_value(self, value_type, value):
         self.value_stack.append(value)
+        self.value_type_stack.append(value_type)
+        
+    def pop_value(self):
+        value = self.value_stack.pop()
+        value_type = self.value_type_stack.pop()
+        return value_type, value
     
-    def get_value(self , value_stack_index: int):
+    def set_value(self, value_type, value, value_stack_index:int):
+        self.value_stack[value_stack_index] = value
+        type_check:Types = self.value_type_stack[value_stack_index]
+        if type_check != value_type:
+            return None
+        return True
+    
+    def get_value(self, value_stack_index: int):
         value = self.value_stack[value_stack_index]
         value_type = self.value_type_stack[value_stack_index]
-        return value_type , value
+        return value_type, value
     
-    def set_value(self , value_stack_index: int , value_type , value):
-        if self.compare_type(value_type, value_stack_index):
-            self.value_stack[value_stack_index] = value
-            return True
-        else:
-            return None
-    
-    def get_type(self, value_stack_index):
-        type_return = self.value_type_stack[value_stack_index]
-        return type_return
-    
-    def compare_type(self, expected_type, value_stack_index):
-        type_check = self.get_type(value_stack_index)
-        if type_check != expected_type:
-            return False
-        return True
-    
-    @staticmethod
-    def possible_type(type_check):
-        if type_check in Types:
-            return True
-        else:
-            return False
-    
-    def dec_variable(self , value_type , name , value):
-        var: Variable = Variable(value_type , name , len(self.value_stack) , self.next_var_id)
-        self.next_var_id += 1
-        check = self.solve_expression(value)
-        if check is None:
-            self.send_error("3")
-            return None
+    def dec_variable(self , value_type , value , name):
+        self.variable_names_to_id[name] = self.next_var_id
+        value_stack_index = len(self.value_stack)
+        var: Variable = Variable(value_type , name , value_stack_index , self.next_var_id)
+        self.push_value(value_type , value)
         self.variables.append(var)
-        self.variable_names_to_id[name] = var.var_id
-        value = self.pop_value()
-        check_type = self.possible_type(value_type)
-        if not check_type:
-            self.send_error("4")
+        self.next_var_id += 1
+    
+    def set_variable(self , value_type , value , name):
+        var = self.get_variable(value_type,name)
+        if var is None:
             return None
-        self.push_value(value_type , value[1])
+        value_stack_index = var.value_stack_index
+        self.value_stack[value_stack_index] = value
         return True
     
-    def get_variable(self , value_type: str , name: str):
-        var_id = self.variable_names_to_id.get(name)
-        if var_id is None:
-            self.send_error(f"Variable {name} not found")
-            return None
+    def get_variable(self, value_type, name):
+        var_id = self.variable_names_to_id[name]
         var = self.variables[var_id]
-        if not self.compare_type(value_type, var.value_stack_index):
-            self.send_error("5")
+        var_value_type = var.type
+        if var_value_type != value_type:
             return None
         return var
     
-    def set_variable(self , value_type , name , expression):
-        error = False
-        var: Variable = self.get_variable(value_type , name)
-        if var is None:
-            error = True
+    def get_variable_by_name(self , name):
+        if name not in self.variable_names_to_id:
             return None
-        
-        if not self.compare_type(value_type, var.value_stack_index):
-            self.send_error("6")
-            return None
-        check = self.solve_expression(expression)
-        if check is None:
-            error = True
-            return None
-        set_value = self.pop_value()[1]
-        self.set_value(var.value_stack_index , value_type , set_value)
-        if error:
-            return None
-        else:
-            return True
-    
-    def print_expression(self , expression):
-        error: bool = False
-        expression = expression.split()
-        check = self.solve_expression(expression)
-        if check is not None:
-            print(self.pop_value()[1])
-            return True
-        else:
-            self.send_error("7")
-            return None
-    
-    @staticmethod
-    def solve_vov_expression_int(value1 , opp , value2):
-        value1 = int(value1)
-        value2 = int(value2)
-        if opp == "+":
-            result = value1 + value2
-        elif opp == "-":
-            result = value1 - value2
-        elif opp == "*":
-            result = value1 * value2
-        elif opp == "/":
-            result = value1 // value2
-        elif opp == "%":
-            result = value1 % value2
-        elif opp == ">>":
-            result = value1 >> value2
-        elif opp == "<<":
-            result = value1 << value2
-        else:
-            return None
-        return str(result)
-    
-    @staticmethod
-    def solve_vov_expression_bool(value1 , opp , value2):
-        value1 = int(value1)
-        value2 = int(value2)
-        if opp == "<":
-            result = value1 < value2
-        elif opp == "==":
-            result = value1 == value2
-        elif opp == ">":
-            result = value1 > value2
-        else:
-            return None
-        return str(result)
-        
-    def solve_expression(self,expression):
-        raise RuntimeError("the big new thing this time")
-    
+        var_id = self.variable_names_to_id[name]
+        var = self.variables[var_id]
+        return var
+
     def send_error(self , error_message: str | None = None):
         self.error = True
         print(f"error line:{self.line_number}")

@@ -1,2 +1,3 @@
-dec int x = 1 - 2
-print x 
+dec int x = 1 - 3n-expr
+dec int f = xn-expr
+print x n-expr
