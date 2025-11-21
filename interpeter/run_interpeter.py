@@ -1,8 +1,7 @@
 from enum import StrEnum, Enum, auto
 from int_expr_parser import ExprParser
-from tokenizer import Tokenizer, Tokens, KeyWords, Token
-from colorama import init, Fore, Style
-import os
+from tokenizer import Tokens, KeyWords, Token
+from colorama import init, Fore
 
 init(autoreset=True)
 class Variable:
@@ -30,30 +29,6 @@ class Interpreter:
         self.next_var_id = 0
         self.line_number = 0
         self.token_read = "how"
-    
-    def run_code(self):
-        langauge_is_running = True
-        while langauge_is_running:
-            command = input("What file to run:")
-            command_lst = command.split()
-            action = command_lst[0]
-            if action != InterpeterActions.Done.value:
-                file_use = command_lst[1]
-                if action == InterpeterActions.Run.value:
-                    if os.path.exists(file_use):
-                        with open(f"{file_use}.code","r") as file:
-                            file_content = file.read()
-                            tokenizer = Tokenizer(file_content)
-                            tokens = tokenizer.tokenize()
-                            self.interpret_code(tokens)
-                    else:
-                        print("file not found")
-                else:
-                    print("unknown command")
-            elif action == InterpeterActions.Done.value:
-                return
-            else:
-                print("unknown command")
     
     def interpret_code(self , tokens):
         token_to_read = 0
@@ -118,6 +93,9 @@ class Interpreter:
                 var_use = self.get_variable_by_name(var_name)
                 var_type_token = var_use.type
                 equals_token = next_token()
+                if equals_token.token_type != Tokens.Equal:
+                    self.send_error("hu")
+                    break
                 expr: list[Token] = []
                 is_valid = True
                 while is_valid:
@@ -251,7 +229,8 @@ class Interpreter:
         var = self.variables[var_id]
         return var
     
-    def print_expression(self,to_print):
+    @staticmethod
+    def print_expression(to_print):
         print(to_print)
 
     def send_error(self, error_message: str | None = None):
@@ -271,7 +250,3 @@ class Interpreter:
         self.variable_names_to_id = {}
         self.next_var_id = 0
         self.line_number = 0
-
-
-interpreter_run = Interpreter()
-interpreter_run.run_code()
