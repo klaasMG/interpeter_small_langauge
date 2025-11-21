@@ -1,7 +1,9 @@
 from enum import StrEnum, Enum, auto
 from int_expr_parser import ExprParser
 from tokenizer import Tokenizer, Tokens, KeyWords, Token
+from colorama import init, Fore, Style
 
+init(autoreset=True)
 class Variable:
     def __init__(self , var_type , name , value_stack_index , var_id):
         self.name = name
@@ -25,6 +27,8 @@ class Interpreter:
         self.variables: list[Variable] = []
         self.variable_names_to_id = {}
         self.next_var_id = 0
+        self.line_number = 0
+        self.token_read = "how"
     
     def run_code(self):
         langauge_is_running = True
@@ -35,9 +39,11 @@ class Interpreter:
             if action != InterpeterActions.Done.value:
                 file_use = command_lst[1]
                 if action == InterpeterActions.Run.value:
-                    tokenizer = Tokenizer(f"{file_use}.code")
-                    tokens = tokenizer.tokenize()
-                    self.interpret_code(tokens)
+                    with open(f"{file_use}.code","r") as file:
+                        file_content = file.read()
+                        tokenizer = Tokenizer(file_content)
+                        tokens = tokenizer.tokenize()
+                        self.interpret_code(tokens)
                 else:
                     print("unknown command")
             elif action == InterpeterActions.Done.value:
@@ -47,21 +53,41 @@ class Interpreter:
     
     def interpret_code(self , tokens):
         token_to_read = 0
+        
         def next_token():
             nonlocal token_to_read
+            self.token_read = token_to_read
+            if token_to_read >= len(tokens):
+                return None  # end of token list
+            tok = tokens[token_to_read]
             token_to_read += 1
-            return tokens[token_to_read]
+            return tok
         def invalid_token():
             nonlocal token_to_read
             token_to_read -= 1
         while token_to_read < len(tokens):
             token = next_token()
             if token.token_type == KeyWords.Dec:
-                var_type = next_token()
-                var_name = next_token()
-                equals = next_token()
-                if equals != Tokens.Equal:
-                    self.send_error()
+                print("f")
+                var_type_token = next_token()
+                var_name_token = next_token()
+                equals_token = next_token()
+                
+                print("DEBUG equals token:" , equals_token.token_type , "value:" , equals_token.value)
+                if equals_token.token_type != Tokens.Equal:
+                    self.send_error("hu")
+                    break
+                
+                if var_type_token.token_type == KeyWords.Int:
+                    var_type = Types.Int
+                else:
+                    self.send_error("Unknown variable type")
+                    break
+                    
+                    # extract variable name string
+                var_name = var_name_token.value if var_name_token.token_type == Tokens.Ident else None
+                if var_name is None:
+                    self.send_error("Expected variable name")
                     break
                 expr: list[Token] = []
                 is_valid = True
@@ -74,15 +100,20 @@ class Interpreter:
                 invalid_token()
                 result = self.solve_expression(expr)
                 for value_type in Types:
-                    if value_type.value == var_type:
+                    if value_type == var_type:
                         var_type = value_type
                         break
                 self.dec_variable(var_type, result,var_name)
             elif token.token_type == KeyWords.Set:
-                var_name = next_token()
+                print("l")
+                var_name_token = next_token()
+                var_name = var_name_token.value if var_name_token.token_type == Tokens.Ident else None
+                if var_name is None:
+                    self.send_error("Expected variable name")
+                    break
                 var_use = self.get_variable_by_name(var_name)
-                var_type = var_use.type
-                equals = next_token()
+                var_type_token = var_use.type
+                equals_token = next_token()
                 expr: list[Token] = []
                 is_valid = True
                 while is_valid:
@@ -94,34 +125,44 @@ class Interpreter:
                 invalid_token()
                 result = self.solve_expression(expr)
                 for value_type in Types:
-                    if value_type.value == var_type:
-                        var_type = value_type
+                    if value_type == var_type_token:
+                        var_type_token = value_type
                         break
-                self.set_variable(var_type , result , var_name)
+                self.set_variable(var_type_token , result , var_name)
             elif token.token_type == KeyWords.Print:
                 left_parentece = next_token()
-                if left_parentece != Tokens.LeftParentce:
+                if left_parentece.token_type != Tokens.LeftParentce:
                     self.send_error()
                     break
                 expr: list[Token] = []
                 is_valid = True
                 while is_valid:
                     token = next_token()
-                    if token.token_type == Tokens.SemiColon or token.token_type == Tokens.RightParentce:
+                    if token.token_type == Tokens.RightParentce:
                         is_valid = False
                     else:
                         expr.append(token)
                 invalid_token()
                 right_parentece = next_token()
-                if right_parentece != Tokens.RightParentce:
-                    self.send_error()
+                if right_parentece.token_type != Tokens.RightParentce:
+                    self.send_error("fg")
                     break
+                result = self.solve_expression(expr)
+                self.print_expression(result)
             semi_colon = next_token()
-            if semi_colon != Tokens.SemiColon:
+            if semi_colon.token_type != Tokens.SemiColon:
                 self.send_error()
                 break
     
     def solve_expression(self , expr: list[Token]):
+        for i , token in enumerate(expr):
+            if token.token_type == Tokens.Ident:
+                var = self.get_variable_by_name(token.value)
+                if var is None:
+                    self.send_error(f"Unknown variable '{token.value}'")
+                    return None
+                value_type , value = self.get_value(var.value_stack_index)
+                expr[i] = Token(Tokens.Number , value)
         parser = ExprParser(expr)
         ast = parser.parse_expr()
         result = self.eval_ast(ast)
@@ -205,14 +246,18 @@ class Interpreter:
         var_id = self.variable_names_to_id[name]
         var = self.variables[var_id]
         return var
+    
+    def print_expression(self,to_print):
+        print(to_print)
 
-    def send_error(self , error_message: str | None = None):
+    def send_error(self, error_message: str | None = None):
         self.error = True
-        print(f"error line:{self.line_number}")
+        print(Fore.RED + f"Error at line {self.line_number}:")
+        print(Fore.RED + f"Error at token {self.token_read}:")
         if error_message:
-            print(error_message)
+            print(Fore.RED + error_message)
         else:
-            print("An error has occurred")
+            print(Fore.RED + "An unknown error occurred")
     
     def reset_interpeter(self):
         self.error = False

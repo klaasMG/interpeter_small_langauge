@@ -3,7 +3,6 @@ from enum import Enum
 class Tokens(Enum):
     Ident = "ident"
     Number = "number"
-    Space = " "
     Equal = "="
     Add = "+"
     Sub = "-"
@@ -37,7 +36,7 @@ class Tokenizer:
         self.expression_num = 0
         
     def next_char(self):
-        if self.i > len(self.file):
+        if self.i >= len(self.file):
             return None
         ch = self.file[self.i]
         self.i += 1
@@ -54,7 +53,7 @@ class Tokenizer:
     def tokenize(self):
         tokens = []
         char = "hold"
-        while char is not None:
+        while self.i < len(self.file):
             char = self.next_char()
             if char in [t.value for t in Tokens]:
                 token_type = next(t for t in Tokens if t.value == char)
@@ -63,8 +62,11 @@ class Tokenizer:
             elif self.is_alpha(char):
                 word = char
                 
-                while self.is_alpha(self.file[self.i]):
-                    word += self.next_char()
+                while self.i < len(self.file):
+                    if self.is_alpha(self.file[self.i]):
+                        word += self.next_char()
+                    else:
+                        break
                     
                 # check if word is a keyword
                 keyword = next((k for k in KeyWords if k.value == word) , None)
@@ -75,15 +77,18 @@ class Tokenizer:
             
             elif self.is_number(char):
                 number = char
-                while self.is_number(self.file[self.i]):
-                    number += self.next_char()
+                while self.i < len(self.file):
+                    if self.is_number(self.file[self.i]):
+                        number += self.next_char()
+                    else:
+                        break
                 
                 tokens.append(Token(Tokens.Number,number))
             
-            elif char == Tokens.Space.value:
+            elif char.isspace():
                 pass
             
             else:
-                print("syntax error")
+                print("syntax error" + f"char {char}")
                 
         return tokens
