@@ -2,6 +2,7 @@ from enum import StrEnum, Enum, auto
 from int_expr_parser import ExprParser
 from tokenizer import Tokenizer, Tokens, KeyWords, Token
 from colorama import init, Fore, Style
+import os
 
 init(autoreset=True)
 class Variable:
@@ -39,11 +40,14 @@ class Interpreter:
             if action != InterpeterActions.Done.value:
                 file_use = command_lst[1]
                 if action == InterpeterActions.Run.value:
-                    with open(f"{file_use}.code","r") as file:
-                        file_content = file.read()
-                        tokenizer = Tokenizer(file_content)
-                        tokens = tokenizer.tokenize()
-                        self.interpret_code(tokens)
+                    if os.path.exists(file_use):
+                        with open(f"{file_use}.code","r") as file:
+                            file_content = file.read()
+                            tokenizer = Tokenizer(file_content)
+                            tokens = tokenizer.tokenize()
+                            self.interpret_code(tokens)
+                    else:
+                        print("file not found")
                 else:
                     print("unknown command")
             elif action == InterpeterActions.Done.value:
