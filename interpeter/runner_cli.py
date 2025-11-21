@@ -1,4 +1,6 @@
 from enum import StrEnum
+from sys import flags
+
 from tokenizer import Tokenizer
 import os
 from run_interpeter import Interpreter
@@ -63,16 +65,26 @@ class Runner:
                 self.language_is_running = False
                 return
 
-            if len(command_lst) < 2:
-                print("Please provide a file name")
-                continue
-
             file_use = command_lst[1]
+            
+            flags = command_lst[2:]
+            
+            for flag in flags:
+                if not flag.startswith("-"):
+                    print("flag is not a flag")
+                if flag == "-force_close=False":
+                    pass
+                elif flag == "-local":
+                    pass
+                else:
+                    print("flag does not exist")
+                    return
 
             if action == InterpeterActions.Run.value:
                 self.run_program_in_terminal(file_use)
             else:
                 print("unknown command")
+                
 
 
 if __name__ == "__main__":
