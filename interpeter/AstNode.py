@@ -42,3 +42,8 @@ class IfNode(ASTNode):
         self.condition = condition
         self.if_block = if_block
         self.else_block = else_block
+        
+class WhileNode(ASTNode):
+    def __init__(self, condition, block):
+        self.condition = condition
+        self.block = block
