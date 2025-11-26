@@ -1,9 +1,10 @@
 from enum import StrEnum, Enum, auto
+
 from colorama import init, Fore
 
-from interpeter.AstNode import IfNode
-from tokenizer import Tokens
 from AstNode import NumberNode, SetNode, VarNode, PrintNode, DeclNode, BinOpNode, BoolNode
+from interpeter.AstNode import IfNode, WhileNode
+from tokenizer import Tokens
 
 init(autoreset=True)
 class Variable:
@@ -38,11 +39,28 @@ class Interpreter:
                 if value_type != Types.Bool:
                     raise Exception("not the right output")
                 if value:
+                    self.push_scope()
                     body = node.if_block
                     self.interpret_code(body)
+                    self.pop_scope()
                 else:
+                    self.push_scope()
                     body = node.else_block
                     self.interpret_code(body)
+                    self.pop_scope()
+            elif isinstance(node, WhileNode):
+                self.push_scope()
+                while True:
+                    value_type, value = self.eval_expr(node.condition)
+                    if value_type != Types.Bool:
+                        raise Exception
+                    if value:
+                        body = node.block
+                    else:
+                        self.pop_scope()
+                        break
+                    self.interpret_code(body)
+                    
             else:
                 self.execute_statement(node)
             
@@ -112,7 +130,7 @@ class Interpreter:
             else:
                 raise Exception(f"Unknown operator {opp}")
         else:
-            raise Exception(f"Unknown")
+            raise Exception("Unknown")
     
     def push_scope(self):
         self.scopes.append({})

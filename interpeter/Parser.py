@@ -1,7 +1,5 @@
-from email.iterators import body_line_iterator
-
 from AstNode import VarNode , NumberNode , SetNode , DeclNode , PrintNode , BinOpNode , BoolNode
-from interpeter.AstNode import IfNode
+from interpeter.AstNode import IfNode, WhileNode
 from tokenizer import Token , Tokens , KeyWords
 
 
@@ -38,22 +36,34 @@ class Parser:
             return self.parse_set()
         elif tok.token_type == KeyWords.If:
             return self.parse_if()
+        elif tok.token_type == KeyWords.While:
+            return self.parse_while()
         else:
             return None
+        
+    def parse_while(self):
+        self.get_token()
+        cond = self.parse_expr()
+        if self.get_token().token_type != Tokens.LeftSquiglyBrace:
+            raise Exception("hfj")
+        body = self.parse_program()
+        if self.get_token().token_type != Tokens.RightSquiglyBrace:
+            raise Exception
+        return WhileNode(cond,body)
     
     def parse_if(self):
         self.get_token()
         cond = self.parse_expr()
-        if self.get_token() != Tokens.LeftSquiglyBrace:
+        if self.get_token().token_type != Tokens.LeftSquiglyBrace:
             raise Exception("{")
         body = self.parse_program()
-        if self.get_token() != Tokens.RightSquiglyBrace:
+        if self.get_token().token_type != Tokens.RightSquiglyBrace:
             raise Exception("}")
-        if self.peek_token() == KeyWords.Else:
-            if self.get_token() != Tokens.LeftSquiglyBrace:
+        if self.peek_token().token_type == KeyWords.Else:
+            if self.get_token().token_type != Tokens.LeftSquiglyBrace:
                 raise Exception("{")
             else_body = self.parse_program()
-            if self.get_token() != Tokens.RightSquiglyBrace:
+            if self.get_token().token_type != Tokens.RightSquiglyBrace:
                 raise Exception("}")
         else:
             else_body = None
